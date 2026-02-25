@@ -73,9 +73,13 @@
                     <div class="sig-role">{{ trainer['job_title'] if trainer else 'Trainer' }}</div>
                 </div>
                 <div class="sig-block">
+                    {% if manager and manager['signature_url'] %}
+                    <img src="{{ manager['signature_url'] }}" class="sig-img" alt="Manager signature">
+                    {% else %}
                     <span class="sig-line"></span>
-                    <div class="sig-name">Manager</div>
-                    <div class="sig-role">MANI Medical Hanoi</div>
+                    {% endif %}
+                    <div class="sig-name">{{ manager['name'] if manager else '' }}</div>
+                    <div class="sig-role">{{ manager['title'] if manager else '' }}</div>
                 </div>
             </div>
             <div class="cert-footer">MANI MEDICAL HANOI • Learning & Certification Platform</div>
@@ -115,7 +119,8 @@
         ctx.fillText('{{ (trainer["name"] if trainer else "Trainer")|replace("'","") }}',265,520);
         ctx.fillStyle='#888';ctx.font='11px Segoe UI,sans-serif';
         ctx.fillText('{{ (trainer["job_title"] if trainer else "Trainer")|replace("'","") }}',265,536);
-        ctx.fillText('Manager',635,520);ctx.fillText('MANI Medical Hanoi',635,536);
+        ctx.fillText('{{ (manager["name"] if manager else "Manager")|replace("'","") }}',635,520);
+        ctx.fillText('{{ (manager["title"] if manager else "MANI Medical Hanoi")|replace("'","") }}',635,536);
         ctx.fillStyle='#003047';ctx.font='bold 10px Segoe UI,sans-serif';
         ctx.fillText('MANI MEDICAL HANOI  •  Learning & Certification Platform',450,580);
         try{

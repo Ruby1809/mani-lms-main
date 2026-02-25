@@ -40,8 +40,9 @@
         <a href="{{ url_for('new_course') }}" class="btn btn-primary">➕ Thêm khóa học</a>
     </div>
     {% for c in courses %}
+    {% set trainer = (users | selectattr('email','equalto',c['created_by']) | list | first) %}
     <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:14px">
-        <div style="flex:1;min-width:180px">
+        <div style="flex:1;min-width:220px">
             <div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">
                 <span class="tag">{{ c['category'] }}</span>
                 <span class="badge badge-info" style="font-size:10px">{{ q_counts.get(c['id'],0) }} câu</span>
@@ -49,6 +50,10 @@
             <h4 style="margin:4px 0;color:var(--primary);font-size:14px">{{ c['title_vi'] or c['title_en'] }}</h4>
             {% set groups = c['target_groups'] | from_json %}
             {% if groups %}<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">{% for g in groups %}<span style="font-size:9px;background:#f0f0f0;padding:1px 6px;border-radius:8px;color:#666">{{ g }}</span>{% endfor %}</div>{% endif %}
+            <div style="margin-top:6px;font-size:11px;color:#666">
+                <span>Trainer: <strong>{{ trainer['name'] if trainer else 'N/A' }}</strong></span>
+                <span style="margin-left:8px">Ngày tạo: {{ (c['created_at'] or '')[:10] }}</span>
+            </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
             <a href="{{ url_for('manage_questions',cid=c['id']) }}" class="btn btn-secondary btn-sm">📝 Câu hỏi</a>
@@ -76,10 +81,20 @@
     <div class="card">
         <h4 style="color:var(--primary);font-size:14px;margin-bottom:10px">🔐 Danh sách Email được phép đăng ký ({{ allowed_emails|length }})</h4>
         {% if user['role'] == 'admin' %}
-        <form method="POST" action="{{ url_for('add_allowed_email') }}" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-            <input type="email" name="email" class="form-control" style="flex:2;min-width:200px" placeholder="email@manimedicalhanoi.com" required>
-            <input type="text" name="note" class="form-control" style="flex:1;min-width:120px" placeholder="Ghi chú (tùy chọn)">
-            <button type="submit" class="btn btn-primary btn-sm">➕ Thêm</button>
+        <form method="POST" action="{{ url_for('add_allowed_email') }}" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input type="email" name="email" class="form-control" style="flex:2;min-width:200px" placeholder="email@manimedicalhanoi.com" required>
+                <input type="text" name="note" class="form-control" style="flex:1;min-width:120px" placeholder="Ghi chú (tùy chọn)">
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="margin-bottom:0">
+                    <label style="font-size:11px;font-weight:600;color:#555">Mật khẩu đăng nhập lần đầu (tùy chọn)</label>
+                    <input type="password" name="initial_password" class="form-control" placeholder="Nếu nhập, tài khoản sẽ đăng nhập bằng mật khẩu này lần đầu.">
+                </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end">
+                <button type="submit" class="btn btn-primary btn-sm">➕ Thêm</button>
+            </div>
         </form>
         {% endif %}
         <div class="table-wrap"><table>
@@ -107,17 +122,47 @@
 <div class="card">
     <h3 style="color:var(--primary);margin-bottom:14px;font-size:16px">📧 Gửi nhắc nhở hoàn thành khóa học</h3>
     <form method="POST" action="{{ url_for('send_reminder') }}">
-        <div class="form-group"><label>Chọn khóa học *</label>
-            <select name="course_id" class="form-control" required><option value="">-- Chọn --</option>{% for c in courses %}<option value="{{ c['id'] }}">{{ c['title_vi'] or c['title_en'] }}</option>{% endfor %}</select></div>
-        <div class="form-group"><label>Gửi đến</label>
+        <div class="form-group">
+            <label>Chọn khóa học *</label>
+            <select name="course_id" class="form-control" required>
+                <option value="">-- Chọn --</option>
+                {% for c in courses %}<option value="{{ c['id'] }}">{{ c['title_vi'] or c['title_en'] }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Gửi đến</label>
             <select name="target_type" class="form-control" id="rem-type" onchange="toggleRT()">
-                <option value="all">Tất cả nhân viên</option><option value="department">Theo phòng ban</option><option value="individual">Cá nhân</option></select></div>
-        <div class="form-group" id="rem-dept" style="display:none"><label>Phòng ban</label>
-            <select name="target_value" class="form-control" id="rem-dept-val">{% for d in DEPARTMENTS %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></div>
-        <div class="form-group" id="rem-email" style="display:none"><label>Email</label>
-            <input type="email" name="target_value" class="form-control" id="rem-email-val" placeholder="email@..."></div>
-        <div class="form-group"><label>Nội dung</label><textarea name="message" class="form-control" rows="3">Vui lòng hoàn thành bài đào tạo và bài test đúng hạn.</textarea></div>
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Gửi?')">📧 Gửi nhắc nhở</button>
+                <option value="all">Tất cả nhân viên</option>
+                <option value="department">Theo phòng ban</option>
+                <option value="team">Theo team</option>
+                <option value="individual">Cá nhân</option>
+            </select>
+        </div>
+        <div class="form-group" id="rem-dept" style="display:none">
+            <label>Phòng ban</label>
+            <select name="_dept_tmp" class="form-control" id="rem-dept-val">
+                {% for d in DEPARTMENTS %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group" id="rem-team" style="display:none">
+            <label>Team</label>
+            <select name="_team_tmp" class="form-control" id="rem-team-val">
+                {% for t in TEAMS %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group" id="rem-email" style="display:none">
+            <label>Email</label>
+            <input type="email" name="_email_tmp" class="form-control" id="rem-email-val" placeholder="email@manimedicalhanoi.com">
+        </div>
+        <div class="form-group">
+            <label>Deadline hoàn thành</label>
+            <input type="date" name="deadline" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Nội dung thêm (tùy chọn)</label>
+            <textarea name="message" class="form-control" rows="3" placeholder="Thông điệp bổ sung, nếu có. Hệ thống sẽ tự động thêm câu nhắc hoàn thành khóa học và deadline."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Gửi nhắc nhở?')">📧 Gửi nhắc nhở</button>
     </form>
 </div>
 </div>
@@ -161,11 +206,23 @@ function openEU(id,name,dept,team,jt,jl,role,status){
 function closeEU(){document.getElementById('eu-modal').classList.remove('show')}
 function toggleRT(){
     var v=document.getElementById('rem-type').value;
-    document.getElementById('rem-dept').style.display=v==='department'?'block':'none';
-    document.getElementById('rem-email').style.display=v==='individual'?'block':'none';
-    if(v==='department'){document.getElementById('rem-dept-val').name='target_value';document.getElementById('rem-email-val').name='_x'}
-    else if(v==='individual'){document.getElementById('rem-email-val').name='target_value';document.getElementById('rem-dept-val').name='_x'}
-    else{document.getElementById('rem-dept-val').name='_x';document.getElementById('rem-email-val').name='_x'}
+    var dept=document.getElementById('rem-dept');
+    var team=document.getElementById('rem-team');
+    var email=document.getElementById('rem-email');
+    var deptVal=document.getElementById('rem-dept-val');
+    var teamVal=document.getElementById('rem-team-val');
+    var emailVal=document.getElementById('rem-email-val');
+
+    dept.style.display='none'; team.style.display='none'; email.style.display='none';
+    deptVal.name='_dept_tmp'; teamVal.name='_team_tmp'; emailVal.name='_email_tmp';
+
+    if(v==='department'){
+        dept.style.display='block'; deptVal.name='target_value';
+    }else if(v==='team'){
+        team.style.display='block'; teamVal.name='target_value';
+    }else if(v==='individual'){
+        email.style.display='block'; emailVal.name='target_value';
+    }
 }
 toggleRT();
 </script>

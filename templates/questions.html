@@ -31,22 +31,42 @@
 
 <!-- RETEST REQUEST -->
 <div class="card" style="border-left:4px solid var(--danger)">
-    <h4 style="color:var(--danger);font-size:14px;margin-bottom:10px">🔄 Yêu cầu làm test lại / Request Retest</h4>
-    <p style="font-size:12px;color:#666;margin-bottom:10px">Reset kết quả và gửi email yêu cầu nhân viên thi lại.</p>
-    <form method="POST" action="{{ url_for('request_retest', cid=course['id']) }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        <div style="flex:1;min-width:120px">
+    <h4 style="color:var(--danger);font-size:14px;margin-bottom:10px">🔄 Yêu cầu làm test / Request Retest</h4>
+    <p style="font-size:12px;color:#666;margin-bottom:10px">Reset kết quả (nếu có) và gửi email yêu cầu nhân viên hoàn thành bài test.</p>
+    <form method="POST" action="{{ url_for('request_retest', cid=course['id']) }}">
+        <div class="form-group">
             <label style="font-size:11px;font-weight:600;color:#555">Gửi đến</label>
             <select name="target_type" class="form-control" id="rt-type" onchange="toggleRT()">
                 <option value="all">Tất cả nhân viên</option>
                 <option value="department">Theo phòng ban</option>
+                <option value="team">Theo team</option>
                 <option value="individual">Cá nhân</option>
             </select>
         </div>
-        <div style="flex:1;min-width:140px" id="rt-val-wrap">
-            <label style="font-size:11px;font-weight:600;color:#555" id="rt-val-label">Giá trị</label>
-            <input type="text" name="target_value" class="form-control" id="rt-val" placeholder="email hoặc phòng ban">
+        <div class="form-group" id="rt-dept-wrap" style="display:none">
+            <label style="font-size:11px;font-weight:600;color:#555">Phòng ban</label>
+            <select class="form-control" id="rt-dept" name="_dept_tmp">
+                {% for d in DEPARTMENTS %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
         </div>
-        <button type="submit" class="btn btn-danger btn-sm" style="height:38px" onclick="return confirm('Gửi yêu cầu thi lại? Kết quả cũ sẽ bị reset.')">🔄 Gửi yêu cầu</button>
+        <div class="form-group" id="rt-team-wrap" style="display:none">
+            <label style="font-size:11px;font-weight:600;color:#555">Team</label>
+            <select class="form-control" id="rt-team" name="_team_tmp">
+                {% for t in TEAMS %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group" id="rt-email-wrap" style="display:none">
+            <label style="font-size:11px;font-weight:600;color:#555">Email cá nhân</label>
+            <input type="email" class="form-control" id="rt-email" name="_email_tmp" placeholder="email@manimedicalhanoi.com">
+        </div>
+        <div class="form-group">
+            <label style="font-size:11px;font-weight:600;color:#555">Deadline hoàn thành</label>
+            <input type="date" name="deadline" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-danger btn-sm"
+                onclick="return confirm('Gửi yêu cầu làm test? Kết quả cũ sẽ bị reset cho các nhân sự được chọn.')">
+            🔄 Gửi yêu cầu
+        </button>
     </form>
 </div>
 
@@ -155,15 +175,31 @@ document.getElementById('csv-textarea').addEventListener('input',function(){
     const lines=this.value.trim().split('\n').filter(l=>l.trim());
     document.getElementById('csv-preview').textContent=lines.length>0?lines.length+' dòng / lines':'';
 });
-// Retest toggle
+// Retest toggle (Gửi đến theo phòng ban / team / cá nhân)
 function toggleRT(){
     var v=document.getElementById('rt-type').value;
-    var w=document.getElementById('rt-val-wrap');
-    var l=document.getElementById('rt-val-label');
-    var i=document.getElementById('rt-val');
-    if(v==='all'){w.style.display='none';i.value=''}
-    else if(v==='department'){w.style.display='block';l.textContent='Phòng ban';i.placeholder='Sales, Marketing, ...'}
-    else{w.style.display='block';l.textContent='Email';i.placeholder='email@manimedicalhanoi.com'}
+    var deptWrap=document.getElementById('rt-dept-wrap');
+    var teamWrap=document.getElementById('rt-team-wrap');
+    var emailWrap=document.getElementById('rt-email-wrap');
+    var dept=document.getElementById('rt-dept');
+    var team=document.getElementById('rt-team');
+    var email=document.getElementById('rt-email');
+
+    // reset names
+    dept.name='_dept_tmp'; team.name='_team_tmp'; email.name='_email_tmp';
+
+    if(v==='department'){
+        deptWrap.style.display='block'; teamWrap.style.display='none'; emailWrap.style.display='none';
+        dept.name='target_value';
+    }else if(v==='team'){
+        deptWrap.style.display='none'; teamWrap.style.display='block'; emailWrap.style.display='none';
+        team.name='target_value';
+    }else if(v==='individual'){
+        deptWrap.style.display='none'; teamWrap.style.display='none'; emailWrap.style.display='block';
+        email.name='target_value';
+    }else{
+        deptWrap.style.display='none'; teamWrap.style.display='none'; emailWrap.style.display='none';
+    }
 }
 toggleRT();
 </script>

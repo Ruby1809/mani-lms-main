@@ -92,7 +92,15 @@
             <div class="uinfo"><div class="uname">{{ session.get('user_name','') }}</div><div class="urole">{{ session.get('user_role','') }}</div></div>
             <a href="{{ url_for('profile') }}" class="avatar-sm" title="Hồ sơ">
                 {% set cu = get_current_user() if get_current_user is defined else None %}
-                {% if cu and cu['avatar_url'] %}<img src="{{ cu['avatar_url'] }}" alt="">{% else %}{{ session.get('user_name','?')[0] }}{% endif %}
+                {% if cu and cu['avatar_url'] %}
+                    {% if cu['avatar_url'].startswith('http') %}
+                        <img src="{{ cu['avatar_url'] }}" alt="">
+                    {% else %}
+                        <img src="{{ url_for('avatar_file', filename=cu['avatar_url']) }}" alt="">
+                    {% endif %}
+                {% else %}
+                    {{ session.get('user_name','?')[0] }}
+                {% endif %}
             </a>
             <a href="{{ url_for('logout') }}" class="btn-white">Đăng xuất</a>
         </div>

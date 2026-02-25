@@ -43,6 +43,20 @@ app.config['AVATAR_UPLOAD_FOLDER'] = AVATAR_UPLOAD_FOLDER
 
 ALLOWED_AVATAR_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
+# ─────────── MANAGER SIGNATURE CONFIG ───────────
+MANAGERS = {
+    "Sales & Marketing Vietnam": {
+        "name": "Tran Thai Tuyen",
+        "title": "MKT & Sales Manager",
+        "signature_url": os.environ.get("SIGN_TTT_URL", ""),
+    },
+    "Back-office": {
+        "name": "Vu Thi Hoa",
+        "title": "Head of Back Office",
+        "signature_url": os.environ.get("SIGN_HOA_URL", ""),
+    },
+}
+
 # ─────────── DEFAULT WHITELISTED EMAILS (fallback, DB overrides) ───────────
 DEFAULT_EMAILS = [
     "tt.tuyen@manimedicalhanoi.com", "nt.ha@manimedicalhanoi.com",
@@ -115,6 +129,11 @@ def allowed_avatar_file(filename):
         return False
     ext = filename.rsplit('.', 1)[1].lower()
     return ext in ALLOWED_AVATAR_EXTENSIONS
+
+
+def get_manager_for_department(dept):
+    """Return manager config dict for a department, or None."""
+    return MANAGERS.get(dept or "")
 
 
 def init_db():
@@ -208,6 +227,7 @@ def init_db():
     add_col('questions', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     add_col('results', 'attempt_number', "INTEGER DEFAULT 1")
     add_col('results', 'is_valid', "INTEGER DEFAULT 1")
+    add_col('retest_requests', 'deadline', "TEXT")
 
     # ── Seed allowed_emails from defaults ──
     for em in DEFAULT_EMAILS:
@@ -407,12 +427,30 @@ def send_reminder_email(to_email, user_name, course_title, message_text, sender_
     <div style="background:#003047;padding:20px;text-align:center;border-radius:10px 10px 0 0">
         <h2 style="color:#FFE100;margin:0">📢 Nhắc nhở đào tạo</h2></div>
     <div style="background:#fff;padding:30px;border:1px solid #eee;border-radius:0 0 10px 10px">
-        <p>Xin chào <strong>{user_name}</strong>,</p>
+        <p>Dear <strong>{user_name}</strong>,</p>
         <div style="background:#fff3cd;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid #FFE100">
             <strong style="color:#003047">{course_title}</strong>
             <p style="margin:8px 0 0;color:#555">{message_text}</p></div>
         <p style="color:#888;font-size:12px">Gửi bởi: {sender_name}<br>— MANI Medical Hanoi</p></div></div>"""
     return send_email(to_email, f'📢 Nhắc nhở: {course_title}', html)
+
+
+def send_retest_email(to_email, user_name, course_title, deadline_str, sender_name):
+    msg = (
+        f'vui lòng hoàn thành bài test về bài đào tạo "{course_title}" trước ngày {deadline_str}.'
+        if deadline_str else
+        f'vui lòng hoàn thành bài test về bài đào tạo "{course_title}" trong thời gian sớm nhất.'
+    )
+    html = f"""<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+    <div style="background:#003047;padding:20px;text-align:center;border-radius:10px 10px 0 0">
+        <h2 style="color:#FFE100;margin:0">Yêu cầu hoàn thành bài kiểm tra</h2></div>
+    <div style="background:#fff;padding:30px;border:1px solid #eee;border-radius:0 0 10px 10px">
+        <p>Dear <strong>{user_name}</strong>,</p>
+        <div style="background:#fff3cd;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid #FFE100">
+            <strong style="color:#003047">{course_title}</strong>
+            <p style="margin:8px 0 0;color:#555">{msg}</p></div>
+        <p style="color:#888;font-size:12px">Gửi bởi: {sender_name}<br>— MANI Medical Hanoi</p></div></div>"""
+    return send_email(to_email, 'Yêu cầu hoàn thành bài kiểm tra', html)
 
 
 def get_user_attempt_info(email, course_id):
@@ -421,11 +459,21 @@ def get_user_attempt_info(email, course_id):
                        (email, course_id)).fetchall()
     has_passed = any(r['passed'] for r in valid)
     has_retest = db.execute(
-        """SELECT id FROM retest_requests WHERE course_id=? AND
-           ((target_type='individual' AND target_value=?) OR target_type='all' OR
-            (target_type='department' AND target_value=(SELECT department FROM users WHERE email=?)))
-           AND created_at > COALESCE((SELECT MAX(completed_at) FROM results WHERE user_email=? AND course_id=? AND is_valid=1),'2000-01-01')
-        """, (course_id, email, email, email, course_id)).fetchone()
+        """SELECT id FROM retest_requests
+           WHERE course_id=? AND
+                 (
+                    target_type='all'
+                    OR (target_type='individual' AND target_value=?)
+                    OR (target_type='department' AND target_value=(SELECT department FROM users WHERE email=?))
+                    OR (target_type='team' AND target_value=(SELECT team FROM users WHERE email=?))
+                 )
+           AND created_at > COALESCE(
+                (SELECT MAX(completed_at) FROM results WHERE user_email=? AND course_id=? AND is_valid=1),
+                '2000-01-01'
+           )
+        """,
+        (course_id, email, email, email, email, course_id),
+    ).fetchone()
     return {'attempt_count': len(valid), 'has_passed': has_passed,
             'has_retest_request': has_retest is not None, 'results': valid}
 
@@ -441,8 +489,15 @@ def get_course_trainer(course):
 # ─────────── JINJA ───────────
 @app.context_processor
 def inject_globals():
-    return {'now': datetime.now().strftime('%Y-%m-%d'), 'categories': CATEGORIES,
-            'DEPARTMENTS': DEPARTMENTS, 'TEAMS': TEAMS, 'JOB_TITLES': JOB_TITLES, 'JOB_LEVELS': JOB_LEVELS}
+    return {
+        'now': datetime.now().strftime('%Y-%m-%d'),
+        'categories': CATEGORIES,
+        'DEPARTMENTS': DEPARTMENTS,
+        'TEAMS': TEAMS,
+        'JOB_TITLES': JOB_TITLES,
+        'JOB_LEVELS': JOB_LEVELS,
+        'MANAGERS': MANAGERS,
+    }
 
 @app.template_filter('from_json')
 def from_json_filter(s):
@@ -773,7 +828,9 @@ def download_cert(cid, rid):
     if not course or not result:
         flash('Chứng chỉ không khả dụng.', 'error'); return redirect(url_for('dashboard'))
     trainer = get_course_trainer(course)
-    return render_template('certificate.html', user=user, course=course, result=result, trainer=trainer)
+    manager = get_manager_for_department(user['department'])
+    return render_template('certificate.html', user=user, course=course, result=result,
+                           trainer=trainer, manager=manager)
 
 @app.route('/certificate/<int:cid>/<int:rid>/send-email', methods=['POST'])
 @login_required
@@ -844,15 +901,45 @@ def update_user(uid):
 def add_allowed_email():
     email = request.form.get('email', '').strip().lower()
     note = request.form.get('note', '')
+    initial_password = request.form.get('initial_password', '').strip()
     if email and '@' in email:
         db = get_db()
         try:
-            db.execute("INSERT INTO allowed_emails (email,note,added_by) VALUES (?,?,?)",
-                       (email, note, session.get('user_email', '')))
+            db.execute(
+                "INSERT OR IGNORE INTO allowed_emails (email,note,added_by) VALUES (?,?,?)",
+                (email, note, session.get('user_email', ''))
+            )
             db.commit()
-            flash(f'Đã thêm {email}!', 'success')
+            flash(f'Đã thêm {email} vào whitelist!', 'success')
         except sqlite3.IntegrityError:
-            flash('Email đã tồn tại.', 'warning')
+            flash('Email đã tồn tại trong whitelist.', 'warning')
+
+        # Optional: create or update user with initial password
+        if initial_password:
+            pwd_hash = hash_password(initial_password)
+            user_row = db.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+            if user_row:
+                db.execute(
+                    "UPDATE users SET password_hash=?, verified=1, status='active' WHERE email=?",
+                    (pwd_hash, email)
+                )
+            else:
+                db.execute(
+                    """INSERT INTO users (email,password_hash,name,department,team,job_title,job_level,role,verified,status)
+                       VALUES (?,?,?,?,?,?,?,?,1,'active')""",
+                    (
+                        email,
+                        pwd_hash,
+                        email,
+                        DEPARTMENTS[0],
+                        'N/A',
+                        'Staff',
+                        'Staff',
+                        'learner',
+                    ),
+                )
+            db.commit()
+            flash('Đã đặt mật khẩu đăng nhập lần đầu cho tài khoản này.', 'success')
     else:
         flash('Email không hợp lệ.', 'error')
     return redirect(url_for('admin_panel') + '#emails')
@@ -999,8 +1086,11 @@ def request_retest(cid):
     db = get_db()
     tt = request.form.get('target_type', 'all')
     tv = request.form.get('target_value', '')
-    db.execute("INSERT INTO retest_requests (course_id,target_type,target_value,requested_by) VALUES (?,?,?,?)",
-               (cid, tt, tv, user['email']))
+    deadline = request.form.get('deadline', '').strip()
+    db.execute(
+        "INSERT INTO retest_requests (course_id,target_type,target_value,requested_by,deadline) VALUES (?,?,?,?,?)",
+        (cid, tt, tv, user['email'], deadline),
+    )
     db.commit()
     course = db.execute("SELECT * FROM courses WHERE id=?", (cid,)).fetchone()
     ct = course['title_vi'] or course['title_en'] if course else ''
@@ -1008,12 +1098,20 @@ def request_retest(cid):
         targets = db.execute("SELECT * FROM users WHERE role IN ('learner','trainer') AND verified=1 AND status='active'").fetchall()
     elif tt == 'department':
         targets = db.execute("SELECT * FROM users WHERE department=? AND verified=1 AND status='active'", (tv,)).fetchall()
+    elif tt == 'team':
+        targets = db.execute("SELECT * FROM users WHERE team=? AND verified=1 AND status='active'", (tv,)).fetchall()
     else:
         targets = db.execute("SELECT * FROM users WHERE email=? AND verified=1", (tv,)).fetchall()
 
     sent = sum(
         1 for t in targets
-        if send_reminder_email(t['email'], t['name'], ct, 'Bạn được yêu cầu làm lại bài test.', user['name'])
+        if send_retest_email(
+            t['email'],
+            t['name'],
+            ct,
+            deadline,
+            user['name'],
+        )
     )
 
     if not targets:
@@ -1036,17 +1134,24 @@ def send_reminder():
     if not course: flash('Khóa học không tồn tại.', 'error'); return redirect(url_for('admin_panel'))
     ct = course['title_vi'] or course['title_en']
     tt, tv = request.form.get('target_type','all'), request.form.get('target_value','')
-    msg = request.form.get('message', 'Vui lòng hoàn thành bài đào tạo.')
+    deadline = request.form.get('deadline', '').strip()
     if tt == 'all':
         targets = db.execute("SELECT * FROM users WHERE role IN ('learner','trainer') AND verified=1 AND status='active'").fetchall()
     elif tt == 'department':
         targets = db.execute("SELECT * FROM users WHERE department=? AND verified=1 AND status='active'", (tv,)).fetchall()
+    elif tt == 'team':
+        targets = db.execute("SELECT * FROM users WHERE team=? AND verified=1 AND status='active'", (tv,)).fetchall()
     else:
         targets = db.execute("SELECT * FROM users WHERE email=? AND verified=1", (tv,)).fetchall()
 
+    def build_msg(user_name):
+        if deadline:
+            return f'vui lòng hoàn thành bài đào tạo "{ct}" vào trước ngày {deadline}.'
+        return f'vui lòng hoàn thành bài đào tạo "{ct}" trong thời gian sớm nhất.'
+
     sent = sum(
         1 for t in targets
-        if send_reminder_email(t['email'], t['name'], ct, msg, user['name'])
+        if send_reminder_email(t['email'], t['name'], ct, build_msg(t['name']), user['name'])
     )
 
     if not targets:
