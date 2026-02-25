@@ -140,10 +140,10 @@
             </div>
             <p style="font-weight:600;font-size:13px;margin-bottom:4px">{{ q['text'] }}</p>
             <div style="font-size:11px;color:#666;display:flex;flex-wrap:wrap;gap:8px">
-                <span style="{% if q['answer']=='a' %}font-weight:700;color:var(--success){% endif %}">A: {{ q['option_a'] }}</span>
-                <span style="{% if q['answer']=='b' %}font-weight:700;color:var(--success){% endif %}">B: {{ q['option_b'] }}</span>
-                {% if q['option_c'] %}<span style="{% if q['answer']=='c' %}font-weight:700;color:var(--success){% endif %}">C: {{ q['option_c'] }}</span>{% endif %}
-                {% if q['option_d'] %}<span style="{% if q['answer']=='d' %}font-weight:700;color:var(--success){% endif %}">D: {{ q['option_d'] }}</span>{% endif %}
+                <span class="q-ans {% if q['answer']=='a' %}q-ans-correct{% endif %}">A: {{ q['option_a'] }}</span>
+                <span class="q-ans {% if q['answer']=='b' %}q-ans-correct{% endif %}">B: {{ q['option_b'] }}</span>
+                {% if q['option_c'] %}<span class="q-ans {% if q['answer']=='c' %}q-ans-correct{% endif %}">C: {{ q['option_c'] }}</span>{% endif %}
+                {% if q['option_d'] %}<span class="q-ans {% if q['answer']=='d' %}q-ans-correct{% endif %}">D: {{ q['option_d'] }}</span>{% endif %}
             </div>
             {% if q['explanation'] %}<p style="font-size:10px;color:#888;font-style:italic;margin-top:2px">💡 {{ q['explanation'] }}</p>{% endif %}
         </div>

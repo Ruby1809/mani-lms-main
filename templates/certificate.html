@@ -46,7 +46,16 @@
         <form method="POST" action="{{ url_for('send_cert_email',cid=course['id'],rid=result['id']) }}" style="display:inline"><button type="submit" class="btn btn-success">📧 Gửi email</button></form>
         <a href="{{ url_for('course_detail',cid=course['id']) }}" class="btn btn-outline">← Quay lại</a>
     </div>
-    <div class="cert-wrap" id="cert-html">
+    <div class="cert-wrap" id="cert-html"
+         data-user-name="{{ user['name'] }}"
+         data-course-title="{{ course['title_vi'] or course['title_en'] }}"
+         data-score="{{ result['score'] }}"
+         data-total="{{ result['total'] }}"
+         data-date="{{ result['completed_at'][:10] }}"
+         data-trainer-name="{{ trainer['name'] if trainer else 'Trainer' }}"
+         data-trainer-title="{{ trainer['job_title'] if trainer else 'Trainer' }}"
+         data-manager-name="{{ manager['name'] if manager else 'Manager' }}"
+         data-manager-title="{{ manager['title'] if manager else 'MANI Medical Hanoi' }}">
         <div class="cert-border"><div class="cert-inner">
             <div class="corner c-tl"></div><div class="corner c-tr"></div><div class="corner c-bl"></div><div class="corner c-br"></div>
             <img src="https://lh3.googleusercontent.com/d/1KH0xWe9JoWkmSb2fhYvtfr8kmUN7Ggcj" alt="MANI" style="height:44px;margin-bottom:10px" onerror="this.style.display='none'" crossorigin="anonymous">
@@ -58,7 +67,11 @@
             <p style="color:#555;font-size:14px">Đã hoàn thành khóa đào tạo / Has completed</p>
             <div class="cert-course">"{{ course['title_vi'] or course['title_en'] }}"</div>
             <div class="cert-score">Điểm / Score: {{ result['score'] }}/{{ result['total'] }}</div>
-            <div class="score-bar"><div class="score-fill" style="width:{{ (result['score']/result['total']*100)|round }}%"></div></div>
+            <div class="score-bar">
+                <div class="score-fill" id="score-fill"
+                     data-score="{{ result['score'] }}"
+                     data-total="{{ result['total'] }}"></div>
+            </div>
             <div class="cert-date">Ngày / Date: {{ result['completed_at'][:10] }}</div>
             <div class="divider" style="margin-top:24px"></div>
             <!-- SIGNATURES -->
@@ -78,8 +91,8 @@
                     {% else %}
                     <span class="sig-line"></span>
                     {% endif %}
-                    <div class="sig-name">{{ manager['name'] if manager else '' }}</div>
-                    <div class="sig-role">{{ manager['title'] if manager else '' }}</div>
+                    <div class="sig-name">{{ manager['name'] if manager else 'Manager' }}</div>
+                    <div class="sig-role">{{ manager['title'] if manager else 'MANI Medical Hanoi' }}</div>
                 </div>
             </div>
             <div class="cert-footer">MANI MEDICAL HANOI • Learning & Certification Platform</div>
@@ -87,6 +100,27 @@
     </div>
     <img id="cert-img" alt="Certificate">
     <script>
+    const certRoot = document.getElementById('cert-html');
+    const CERT_USER_NAME = certRoot ? (certRoot.dataset.userName || '') : '';
+    const CERT_COURSE_TITLE = certRoot ? (certRoot.dataset.courseTitle || '') : '';
+    const CERT_SCORE = certRoot ? Number(certRoot.dataset.score || '0') : 0;
+    const CERT_TOTAL = certRoot ? Number(certRoot.dataset.total || '1') : 1;
+    const CERT_DATE = certRoot ? (certRoot.dataset.date || '') : '';
+    const CERT_TRAINER_NAME = certRoot ? (certRoot.dataset.trainerName || 'Trainer') : 'Trainer';
+    const CERT_TRAINER_TITLE = certRoot ? (certRoot.dataset.trainerTitle || 'Trainer') : 'Trainer';
+    const CERT_MANAGER_NAME = certRoot ? (certRoot.dataset.managerName || 'Manager') : 'Manager';
+    const CERT_MANAGER_TITLE = certRoot ? (certRoot.dataset.managerTitle || 'MANI Medical Hanoi') : 'MANI Medical Hanoi';
+
+    // Set visible progress bar width for HTML view
+    (function(){
+        const sf = document.getElementById('score-fill');
+        if (!sf) return;
+        const s = Number(sf.dataset.score || '0');
+        const t = Number(sf.dataset.total || '1') || 1;
+        const pct = Math.max(0, Math.min(100, (s / t) * 100));
+        sf.style.width = pct + '%';
+    })();
+
     function downloadAsImage(){
         const canvas=document.createElement('canvas');const scale=2;
         canvas.width=900*scale;canvas.height=660*scale;
@@ -103,29 +137,29 @@
         ctx.font='bold 17px Georgia,serif';ctx.fillStyle='#3A7595';ctx.fillText('CERTIFICATE OF COMPLETION',450,130);
         ctx.fillStyle='#FFE100';ctx.fillRect(250,142,400,3);
         ctx.fillStyle='#555';ctx.font='14px Segoe UI,sans-serif';ctx.fillText('Chứng nhận rằng / This is to certify that',450,175);
-        ctx.fillStyle='#003047';ctx.font='bold 32px Georgia,serif';ctx.fillText('{{ user["name"]|replace("'","") }}',450,218);
+        ctx.fillStyle='#003047';ctx.font='bold 32px Georgia,serif';ctx.fillText(CERT_USER_NAME,450,218);
         ctx.fillStyle='#555';ctx.font='14px Segoe UI,sans-serif';ctx.fillText('Đã hoàn thành / Has completed',450,260);
         ctx.fillStyle='#3A7595';ctx.font='bold 20px Georgia,serif';
-        ctx.fillText('"{{ (course["title_vi"] or course["title_en"])|replace("'","") }}"',450,294);
+        ctx.fillText('"' + CERT_COURSE_TITLE + '"',450,294);
         ctx.fillStyle='#333';ctx.font='600 18px Segoe UI,sans-serif';
-        ctx.fillText('Điểm / Score: {{ result["score"] }}/{{ result["total"] }}',450,336);
+        ctx.fillText('Điểm / Score: ' + CERT_SCORE + '/' + CERT_TOTAL,450,336);
         ctx.fillStyle='#E0E0E0';ctx.fillRect(350,352,200,10);
-        ctx.fillStyle='#28A745';ctx.fillRect(350,352,200*({{ result['score'] }}/{{ result['total'] }}),10);
-        ctx.fillStyle='#777';ctx.font='13px Segoe UI,sans-serif';ctx.fillText('Ngày / Date: {{ result["completed_at"][:10] }}',450,395);
+        ctx.fillStyle='#28A745';ctx.fillRect(350,352,200*(CERT_SCORE/CERT_TOTAL),10);
+        ctx.fillStyle='#777';ctx.font='13px Segoe UI,sans-serif';ctx.fillText('Ngày / Date: ' + CERT_DATE,450,395);
         ctx.fillStyle='#FFE100';ctx.fillRect(200,418,500,3);
         // Trainer signature area
         ctx.fillStyle='#ccc';ctx.fillRect(180,500,170,1);ctx.fillRect(550,500,170,1);
         ctx.fillStyle='#003047';ctx.font='bold 13px Segoe UI,sans-serif';
-        ctx.fillText('{{ (trainer["name"] if trainer else "Trainer")|replace("'","") }}',265,520);
+        ctx.fillText(CERT_TRAINER_NAME,265,520);
         ctx.fillStyle='#888';ctx.font='11px Segoe UI,sans-serif';
-        ctx.fillText('{{ (trainer["job_title"] if trainer else "Trainer")|replace("'","") }}',265,536);
-        ctx.fillText('{{ (manager["name"] if manager else "Manager")|replace("'","") }}',635,520);
-        ctx.fillText('{{ (manager["title"] if manager else "MANI Medical Hanoi")|replace("'","") }}',635,536);
+        ctx.fillText(CERT_TRAINER_TITLE,265,536);
+        ctx.fillText(CERT_MANAGER_NAME,635,520);
+        ctx.fillText(CERT_MANAGER_TITLE,635,536);
         ctx.fillStyle='#003047';ctx.font='bold 10px Segoe UI,sans-serif';
         ctx.fillText('MANI MEDICAL HANOI  •  Learning & Certification Platform',450,580);
         try{
             const link=document.createElement('a');
-            link.download='Certificate_{{ user["name"]|replace(" ","_") }}.png';
+            link.download='Certificate_'+CERT_USER_NAME.replace(/\s+/g,'_')+'.png';
             link.href=canvas.toDataURL('image/png');
             if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
                 const img=document.getElementById('cert-img');img.src=canvas.toDataURL('image/png');img.style.display='block';
